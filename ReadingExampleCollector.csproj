@@ -7,4 +7,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Google.Apis" Version="1.67.0" />
+	<PackageReference Include="Google.Apis.Auth" Version="1.67.0" />
+	<PackageReference Include="Google.Apis.Sheets.v4" Version="1.67.0.3148" />
+  </ItemGroup>
+
 </Project>
