@@ -9,34 +9,48 @@ using UpdateRequest = Google.Apis.Sheets.v4.SpreadsheetsResource.ValuesResource.
 
 namespace GoogleSheetsExample {
     public class Program {
-        static void Main(string[] args) {
+        private static List<ColumnSpan> wordRanges = new List<ColumnSpan> { new ColumnSpan("B2:B1800"), new ColumnSpan("J2:J1800") };
+        private static ColumnSpan kanjiRange = new ColumnSpan("B3:B1300");
+
+        private static string credentialsFileName = "japanese-417119-e94d80bf56c9.json";
+        private static string spreadsheetId = "1pJCzatA15yrxHMTlYcoxynaDEpdlMR07NNrmN462Ays";
+        private static string wordSheetName = "単語";
+        private static string readingSheetName = "読";
+        private static string exampleColumn = "G";
+
+        public static void Main(string[] args) {
             Console.InputEncoding = Encoding.Unicode;
             Console.OutputEncoding = Encoding.Unicode;
-
-            List<ColumnSpan> wordRanges = new List<ColumnSpan> { new ColumnSpan("B2:B1800"), new ColumnSpan("J2:J1800") };
-            List<ColumnSpan> kanjiRanges = new List<ColumnSpan> { new ColumnSpan("B3:B1300") };
-
-            string credentialsFileName = "japanese-417119-e94d80bf56c9.json";
-            string spreadsheetId = "1pJCzatA15yrxHMTlYcoxynaDEpdlMR07NNrmN462Ays";
-            string wordSheetName = "単語";
-            string readingSheetName = "読";
 
             string credentialsFilePath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"..\\..\\..\\{credentialsFileName}"));
             SheetsService service = CreateGoogleSheetsService(credentialsFilePath);
 
-            List<Cell> words = FetchWords(service, spreadsheetId, wordSheetName, wordRanges);
+            List<Cell> words = FetchCells(service, spreadsheetId, wordSheetName, wordRanges);
+            List<Cell> kanjis = FetchCells(service, spreadsheetId, readingSheetName, new List<ColumnSpan> { kanjiRange });
 
-            List<IList<object>> newValues = new List<IList<object>>();
-            newValues.Add(new List<object> { "Test" });
-            newValues.Add(new List<object> { "Test2" });
 
-            ValueRange valueRange = new ValueRange();
-            valueRange.Values = newValues;
+            var newValues = new List<IList<object>>();
 
-            UpdateRequest updateRequest = service.Spreadsheets.Values.Update(valueRange, spreadsheetId, $"{readingSheetName}!G3:G4");
-            updateRequest.ValueInputOption = UpdateRequest.ValueInputOptionEnum.USERENTERED; //?
+            foreach (Cell cell in kanjis) {
+                List<string> containingWords = words.Where(word => word.Content.Contains(cell.Content)).Select(word => word.Content).ToList();
 
-            UpdateValuesResponse response2 = updateRequest.Execute();
+                if (containingWords.Count > 1) {
+                    string result = containingWords.Aggregate((current, next) => current + ", " + next);
+                    newValues.Add(new List<object> { result });
+                }
+                else if (containingWords.Count == 1) {
+                    newValues.Add(new List<object> { containingWords.FirstOrDefault()! });
+                }
+                else {
+                    newValues.Add(new List<object> { "" });
+                }
+            }
+            ValueRange exampleValues = new ValueRange { Values = newValues };
+            string exampleTargetRange = $"{readingSheetName}!{exampleColumn}{kanjiRange.FromRow}:{exampleColumn}{kanjiRange.ToRow}";
+
+            UpdateRequest updateRequest = service.Spreadsheets.Values.Update(exampleValues, spreadsheetId, exampleTargetRange);
+            updateRequest.ValueInputOption = UpdateRequest.ValueInputOptionEnum.USERENTERED;
+            updateRequest.Execute();
         }
 
         private static SheetsService CreateGoogleSheetsService(string credPath) {
@@ -54,13 +68,13 @@ namespace GoogleSheetsExample {
             return service;
         }
 
-        private static List<Cell> FetchWords(SheetsService service, string spreadsheetId, string wordSheetName, List<ColumnSpan> wordRanges) {
+        private static List<Cell> FetchCells(SheetsService service, string sheetId, string sheetName, List<ColumnSpan> spans) {
             List<Cell> words = new List<Cell>();
 
-            foreach (ColumnSpan span in wordRanges) {
-                string reqRange = $"{wordSheetName}!{span}";
+            foreach (ColumnSpan span in spans) {
+                string reqRange = $"{sheetName}!{span}";
 
-                GetRequest request = service.Spreadsheets.Values.Get(spreadsheetId, reqRange);
+                GetRequest request = service.Spreadsheets.Values.Get(sheetId, reqRange);
                 ValueRange response = request.Execute();
 
                 for (int i = 0; i < response.Values.Count; i++) {
